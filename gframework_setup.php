@@ -72,7 +72,7 @@ function get_libfilename($default)
 
 function validate_repo_url($url)
 {
-	$msg = shell_exec("git ls-remote --exit-code -h $url 2>&1");
+	$msg = trim(shell_exec("git ls-remote --exit-code -h $url 2>&1"));
 	if (preg_match("/fatal:/", $msg))
 		return false;
 	return true;
@@ -82,7 +82,8 @@ function get_valid_repo()
 {
 	while (1)
 	{
-		$url = get_input_nospaces();
+		$url = str_replace(array('\'', '"', ',', ';', '<', '>'), "",
+			trim(readline(), "\t\n\r\0\x0B '\"?"));
 		if (validate_repo_url($url) == false)
 			echo ERR."That does not appear to be a valid repository. Try again.\n".RST;
 		else
@@ -94,7 +95,8 @@ function get_valid_repo_or_empty_string()
 {
 	while (1)
 	{
-		$input = trim(readline());
+		$input = str_replace(array('\'', '"', ',', ';', '<', '>'), "",
+			trim(readline(), "\t\n\r\0\x0B '\"?"));
 		if ($input == null || $input == "")
 			return "";
 		elseif (validate_repo_url($input))
@@ -190,6 +192,8 @@ if ($using_c)
 	
 	$lib_targets = "";
 	$gitignore_text = "";
+	$lib_clean_adds = "";
+	$lib_fclean_adds = "";
 	
 	# -------------------------------------------------------------------------
 	#   Phase 4: Get External Libraries
@@ -234,6 +238,9 @@ if ($using_c)
 			else
 				echo GRN."Ok, this library will be an embedded repo for this project.\n".RST;
 			$dependtext .= "lib/$libdirname/$libfilename ";
+			$lib_clean_adds .= "\t@make -C lib/$libdirname/ clean\n";
+			$lib_fclean_adds .= "\t@make -C lib/$libdirname/ fclean\n";
+
 		}
 		else
 			$another = false;
@@ -253,15 +260,23 @@ if ($using_c)
 	# -------------------------------------------------------------------------
 	
 	$makefile_text .= "all: \$(NAME)\n\n";
+
 	$makefile_text .= "\$(NAME): \$(SRC) \$(SRC_MAIN) \$(DEPEND)\n";
 	$makefile_text .= "\t\$(CC) \$(CFLAGS) -o \$(NAME) \$(INC) \$(LIB) \$(SRC) \$(SRC_MAIN)\n\n";
+
 	$makefile_text .= "clean:\n";
 	if ($add_gut) $makefile_text .= "\t@make gut_clean\n";
+	$makefile_text .= $lib_clean_adds;
 	$makefile_text .= "\n\n";
+
 	$makefile_text .= "fclean:\n\t@rm -f \$(NAME)\n";
 	if ($add_gut) $makefile_text .= "\t@make gut_fclean\n";
+	$makefile_text .= $lib_fclean_adds;
 	$makefile_text .= "\n";
-	$makefile_text .= "re:\n\t@make fclean\n\t@make all\n\n";
+
+	$makefile_text .= "re:\n\t@make fclean\n\t@make all\n";
+	$makefile_text .= "\n";
+
 	$makefile_text .= $lib_targets;
 	
 	# -------------------------------------------------------------------------
